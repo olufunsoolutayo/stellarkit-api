@@ -65,4 +65,58 @@ router.get("/friendbot/:accountId", async (req, res, next) => {
   }
 });
 
+/**
+ * GET /utils/base64
+ * Encode or decode a string using Base64.
+ *
+ * @example
+ * GET /utils/base64?encode=Hello
+ * GET /utils/base64?decode=SGVsbG8=
+ */
+router.get("/base64", (req, res, next) => {
+  try {
+    const { encode, decode } = req.query;
+    const hasEncode = typeof encode === "string";
+    const hasDecode = typeof decode === "string";
+
+    if (hasEncode && hasDecode) {
+      const err = new Error("Provide only one of 'encode' or 'decode', not both");
+      err.statusCode = 400;
+      err.isValidation = true;
+      throw err;
+    }
+
+    if (!hasEncode && !hasDecode) {
+      const err = new Error("Provide either 'encode' or 'decode' query param");
+      err.statusCode = 400;
+      err.isValidation = true;
+      throw err;
+    }
+
+    if (hasEncode) {
+      return success(res, {
+        input: encode,
+        encoded: Buffer.from(encode, "utf8").toString("base64"),
+        mode: "encode",
+      });
+    }
+
+    const base64Pattern = /^[A-Za-z0-9+/]*={0,2}$/;
+    if (!base64Pattern.test(decode) || decode.length % 4 !== 0) {
+      const err = new Error("Invalid base64 string");
+      err.statusCode = 400;
+      err.isValidation = true;
+      throw err;
+    }
+
+    return success(res, {
+      input: decode,
+      decoded: Buffer.from(decode, "base64").toString("utf8"),
+      mode: "decode",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
