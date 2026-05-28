@@ -78,6 +78,7 @@ app.get("/", (req, res) => {
         { method: "GET", path: "/transactions/:id",                 description: "Transaction history for an account" },
         { method: "GET", path: "/transactions/:id/operations",      description: "Operation history for an account" },
         { method: "GET", path: "/asset/:code/:issuer",              description: "Asset metadata and statistics" },
+        { method: "GET", path: "/asset/:code/:issuer/holders",      description: "Paginated accounts holding an asset" },
         { method: "GET", path: "/asset/search?code=:code",          description: "Search assets by code across all issuers" },
         { method: "GET", path: "/utils/friendbot/:accountId",       description: "Fund a testnet account via Friendbot (testnet only)" },
         { method: "WS",  path: "/stream/ledgers",                  description: "Real-time stream of live Stellar ledger updates" },
