@@ -143,6 +143,34 @@ Visit `http://localhost:3000` after startup.
 
 ---
 
+## FAQ
+
+### What is the difference between testnet and mainnet?
+The testnet is a free Stellar network for development and experimentation. Mainnet is the real network for live value transfers. Use testnet while building and switch to mainnet only when you are ready for production.
+
+### How do I get a testnet account?
+You can create a testnet account using Stellar's Friendbot service. In StellarKit API, use `GET /utils/friendbot/:accountId` with a valid public key to fund a new testnet account instantly.
+
+### What are stroops?
+A stroop is the smallest unit of XLM, just like a cent is the smallest unit of a dollar. One XLM equals 10 million stroops, so balances and fees are often measured in stroops internally.
+
+### Why does Stellar require a minimum balance?
+Stellar requires a minimum balance to prevent spam and keep the ledger efficient. Each account and each ledger entry (trustline, offer, data entry, signer) increases the reserve required to keep the account active.
+
+### What is XDR?
+XDR is the binary format Stellar uses to encode transactions, ledger entries, and protocol data. It lets Stellar transmit structured data in a compact, predictable way across the network.
+
+### How can I read claimable balance predicates?
+Claimable balance predicates are conditions that control when a claim is allowed. Common types include `unconditional`, `abs_before`, and `abs_after`. You can also combine them with `and`, `or`, and `not` to build more complex rules.
+
+### What is a home domain?
+A home domain is an optional string attached to a Stellar account that identifies the account's website or service. Wallets and anchors use it for branding, federation lookups, and verifying issuer relationships.
+
+### Are there rate limits for StellarKit API?
+Yes. StellarKit API uses a global rate limiter by default to protect the service and the underlying Horizon endpoints. The default limit is 100 requests per IP per 15 minutes, and it can be adjusted with `RATE_LIMIT_MAX`.
+
+---
+
 ## Understanding Stellar Account Reserves
 
 Stellar requires all accounts to maintain a **minimum XLM balance** to exist on the ledger. This mechanism deters ledger spam and ensures the network remains efficient.
