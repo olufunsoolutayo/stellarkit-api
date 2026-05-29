@@ -64,6 +64,16 @@ This project is ideal for:
 
 ---
 
+## Soroban Smart Contracts
+
+Soroban is Stellar’s smart contract platform for running WebAssembly (WASM) contracts on the Stellar ledger. It differs from traditional Stellar operations because it allows developers to execute programmable contract logic, instead of only submitting payments, trustline updates, account settings, and other built-in ledger operations.
+
+A Soroban contract is referenced by a **contract ID**, which is the address used to invoke the contract after it has been deployed. The contract’s **WASM hash** is the digest of the compiled contract binary and uniquely identifies the contract code that is stored and executed on the network.
+
+StellarKit API currently supports Soroban contract inspection through the `/soroban/contract/:id` endpoint. This endpoint enables developers to look up contract details by contract ID, including the associated WASM hash and contract metadata, making it easier to combine traditional Stellar account workflows with Soroban contract interactions.
+
+---
+
 ## Project Structure
 
 - `src/index.js` — application entry point
