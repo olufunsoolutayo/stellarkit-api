@@ -171,6 +171,47 @@ Yes. StellarKit API uses a global rate limiter by default to protect the service
 
 ---
 
+
+## Testnet vs Mainnet
+
+Stellar operates two public networks: **testnet** and **mainnet**. StellarKit API supports both and switches between them with a single environment variable.
+
+| Feature | Testnet | Mainnet |
+|---|---|---|
+| Real funds | ❌ No — test XLM only | ✅ Yes — real XLM and assets |
+| Network resets | ✅ Periodic resets (quarterly) | ❌ Never resets |
+| Friendbot availability | ✅ Free account funding via `GET /utils/friendbot/:accountId` | ❌ Not available |
+| Horizon URL | `https://horizon-testnet.stellar.org` | `https://horizon.stellar.org` |
+| Recommended for | Development and testing | Production only |
+
+### Switching Between Networks
+
+Open your `.env` file and change `STELLAR_NETWORK`. That is the only value you need to update — `HORIZON_URL` is automatically derived from it and can be left blank.
+
+**Testnet (default):**
+```env
+STELLAR_NETWORK=testnet
+HORIZON_URL=
+```
+
+**Mainnet:**
+```env
+STELLAR_NETWORK=mainnet
+HORIZON_URL=
+```
+
+Restart the server after changing environment variables for the new values to take effect.
+
+### Mainnet Safety Considerations
+
+> ⚠️ **Before switching to mainnet, read this carefully.**
+>
+> - **Real funds are at risk.** Every transaction on mainnet moves real XLM and real assets. Mistakes cannot be undone.
+> - **Friendbot is not available.** You cannot fund accounts for free on mainnet. Accounts must be funded with real XLM.
+> - **The network never resets.** Unlike testnet, mainnet state is permanent. There is no way to undo a transaction or recover a lost private key.
+> - **Never use testnet keypairs on mainnet.** Keys generated or printed during `npm run seed` are for testnet only. Generate fresh keypairs for mainnet and keep private keys secure.
+> - **Test thoroughly on testnet first.** Only switch to `STELLAR_NETWORK=mainnet` when your integration is fully validated.
+
 ## Understanding Stellar Account Reserves
 
 Stellar requires all accounts to maintain a **minimum XLM balance** to exist on the ledger. This mechanism deters ledger spam and ensures the network remains efficient.
