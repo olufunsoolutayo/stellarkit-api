@@ -2,7 +2,9 @@ const express = require("express");
 const router = express.Router();
 const { server } = require("../config/stellar");
 const { success } = require("../utils/response");
-const { feeEstimateCache } = require("../utils/cache");
+const cache = require("../services/cache");
+
+const CACHE_TTL = 5; // seconds
 
 /**
  * GET /fee-estimate
