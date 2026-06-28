@@ -399,6 +399,50 @@ router.get("/validate-account", (req, res, next) => {
 });
 
 /**
+ * GET /utils/validate-hash?hash=abc123...
+ * Validate whether a string is a correctly formatted Stellar transaction hash.
+ * No Horizon call is made — validation is purely local.
+ *
+ * A valid hash is exactly 64 lowercase hexadecimal characters.
+ *
+ * @param {string} hash - The string to validate.
+ *
+ * @returns {{ input, isValid, reason }} isValid is true when the hash is well-formed;
+ *   reason is null for valid hashes and a human-readable explanation for invalid ones.
+ *
+ * @example
+ * GET /utils/validate-hash?hash=3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889
+ */
+router.get("/validate-hash", (req, res, next) => {
+  try {
+    const { hash } = req.query;
+
+    if (hash === undefined || hash === null || hash === "") {
+      const err = new Error("Query parameter 'hash' is required.");
+      err.statusCode = 400;
+      err.isValidation = true;
+      throw err;
+    }
+
+    let isValid = true;
+    let reason = null;
+
+    if (hash.length !== 64) {
+      isValid = false;
+      reason = `Invalid length: expected 64 characters, got ${hash.length}.`;
+    } else if (!/^[0-9a-f]{64}$/.test(hash)) {
+      isValid = false;
+      reason =
+        "Invalid characters: a transaction hash must be 64 lowercase hexadecimal characters (0-9, a-f).";
+    }
+
+    return success(res, { input: hash, isValid, reason });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /utils/decode-xdr
  * Decode a base64-encoded Stellar transaction XDR envelope into JSON.
  *

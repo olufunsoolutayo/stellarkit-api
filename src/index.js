@@ -259,6 +259,7 @@ app.get("/", (req, res) => {
         { method: "GET", path: "/utils/friendbot/:accountId", description: "Fund a testnet account via Friendbot (testnet only)" },
         { method: "GET", path: "/utils/convert?xlm=:xlm", description: "Convert between XLM and stroops" },
         { method: "GET", path: "/utils/validate-account?id=:id", description: "Validate a Stellar public key format (no Horizon call)" },
+        { method: "GET", path: "/utils/validate-hash?hash=:hash", description: "Validate a Stellar transaction hash format (no Horizon call)" },
         { method: "GET", path: "/utils/network-passphrase", description: "Get the Stellar network passphrase for the configured network" },
         { method: "WS", path: "/stream/ledgers", description: "Real-time stream of live Stellar ledger updates" },
         { method: "GET", path: "/cache/stats", description: "Cache hit rate and performance statistics" },
