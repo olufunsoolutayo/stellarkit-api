@@ -8,7 +8,7 @@ const compression = require("compression");
 
 const { setupWebSocket } = require("./websocket");
 const { server } = require("./config/stellar");
-const { networkStatusCache, feeEstimateCache } = require("./utils/cache");
+const cacheService = require("./services/cache");
 
 const rateLimiter = require("./middleware/rateLimiter");
 const contentTypeValidator = require("./middleware/contentTypeValidator");
@@ -60,7 +60,7 @@ async function warmNetworkStatusCache({ logger = console, horizonServer = server
     },
   };
 
-  networkStatusCache.set("network-status", data);
+  cacheService.set("network-status", data);
   logger.log("[CACHE WARM] /network-status");
 }
 
@@ -117,7 +117,7 @@ async function warmFeeEstimateCache({ logger = console, horizonServer = server }
     },
   };
 
-  feeEstimateCache.set("fee-estimate:1", data);
+  cacheService.set("fee-estimate:1", data);
   logger.log("[CACHE WARM] /fee-estimate");
 }
 
@@ -139,7 +139,8 @@ async function warmStartupCaches({ logger = console, horizonServer = server } = 
 
 // ── Security & Parsing ──────────────────────────────────────────────────────
 app.use(helmet());
-app.use(compression({ threshold: 0 }));
+// Skip compression for responses smaller than 1 KB — gzip headers alone can exceed tiny payloads
+app.use(compression({ threshold: 1024 }));
 app.use(cors());
 app.use(requestIdMiddleware);
 app.use(contentTypeValidator);
