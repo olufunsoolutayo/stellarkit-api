@@ -6,7 +6,7 @@ const { success } = require("../utils/response");
 const { formatBalance } = require("../utils/formatBalance");
 const { assetHoldersRateLimiter } = require("../middleware/rateLimiter");
 const normalizeAssetCode = require("../middleware/normalizeAssetCode");
-const { validateAccountId, validateAssetCode, validateAsset } = require("../utils/validators");
+const { validateAccountId, validateAssetCode, validateAsset, validateLimit } = require("../utils/validators");
 const { parsePaginationParams } = require("../utils/pagination");
 router.use(normalizeAssetCode);
 
@@ -57,7 +57,7 @@ router.get(
       validateAsset(code, issuer);
 
       const assetCode = code.toUpperCase();
-      const { limit, order, cursor } = parsePaginationParams(req.query, 200);
+      const { limit, order, cursor } = parsePaginationParams(req.query);
 
       let query = server
         .accounts()
@@ -373,7 +373,7 @@ router.get("/search", async (req, res, next) => {
 
     validateAssetCode(code);
     const assetCode = code.toUpperCase();
-    const limit = Math.min(parseInt(rawLimit) || 10, 50);
+    const limit = validateLimit(rawLimit ?? 20);
 
     const assetsResponse = await server
       .assets()
@@ -475,6 +475,65 @@ router.get("/:code/:issuer/verify", async (req, res, next) => {
 
     const verified = Object.values(checks).every((c) => c.passed);
     return success(res, { verified, checks });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /asset/:code/:issuer/price
+ * Returns the best bid, ask, and mid price for an asset relative to XLM.
+ *
+ * @param {string} code   - Asset code (e.g. USDC)
+ * @param {string} issuer - Issuer account public key (G...)
+ *
+ * @example
+ * GET /asset/USDC/GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN/price
+ */
+router.get("/:code/:issuer/price", async (req, res, next) => {
+  try {
+    const { code, issuer } = req.params;
+    validateAsset(code, issuer);
+
+    const assetCode = code.toUpperCase();
+    const asset = new Asset(assetCode, issuer);
+    const xlm = Asset.native();
+
+    const orderBook = await server.orderbook(asset, xlm).limit(1).call();
+
+    const bestBid = orderBook.bids && orderBook.bids.length > 0
+      ? orderBook.bids[0].price
+      : null;
+    const bestAsk = orderBook.asks && orderBook.asks.length > 0
+      ? orderBook.asks[0].price
+      : null;
+
+    if (bestBid === null && bestAsk === null) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          type: "NotFound",
+          message: `No order book found for ${assetCode} against XLM.`,
+        },
+      });
+    }
+
+    const bidNum = bestBid !== null ? parseFloat(bestBid) : null;
+    const askNum = bestAsk !== null ? parseFloat(bestAsk) : null;
+    let mid = null;
+    if (bidNum !== null && askNum !== null) {
+      mid = ((bidNum + askNum) / 2).toFixed(7);
+    } else {
+      mid = (bidNum ?? askNum).toFixed(7);
+    }
+
+    return success(res, {
+      code: assetCode,
+      issuer,
+      bid: bestBid !== null ? parseFloat(bestBid).toFixed(7) : null,
+      ask: bestAsk !== null ? parseFloat(bestAsk).toFixed(7) : null,
+      mid,
+    });
   } catch (err) {
     next(err);
   }

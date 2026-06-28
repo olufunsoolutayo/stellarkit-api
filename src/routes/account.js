@@ -20,10 +20,10 @@ const { Asset } = require("@stellar/stellar-sdk");
 const { getAssetMetadataFromToml } = require("../utils/tomlResolver");
 const { formatBalance } = require("../utils/formatBalance");
 
-function validateLimit(limit, max = 200) {
+function validateLimit(limit, max = 100) {
   const n = Number(limit);
   if (!Number.isInteger(n) || n <= 0 || n > max) {
-    const err = new Error(`limit must be an integer between 1 and ${max}`);
+    const err = new Error(`limit must be between 1 and ${max}`);
     err.status = 400;
     err.field = "limit";
     err.receivedValue = String(limit);
@@ -230,7 +230,7 @@ router.get("/:id/payments", async (req, res, next) => {
     const { id } = req.params;
     validateAccountId(id);
 
-    const { limit, order, cursor } = parsePaginationParams(req.query, 200);
+    const { limit, order, cursor } = parsePaginationParams(req.query);
 
     let query = server.operations().forAccount(id).limit(limit).order(order);
     if (cursor) query = query.cursor(cursor);
@@ -284,7 +284,7 @@ router.get("/:id/offers", async (req, res, next) => {
     const { id } = req.params;
     validateAccountId(id);
 
-    const limit = validateLimit(req.query.limit || 10, 200);
+    const limit = validateLimit(req.query.limit ?? 20);
     const cursor = req.query.cursor || undefined;
 
     let query = server.offers().forAccount(id).limit(limit);
@@ -884,7 +884,7 @@ router.get("/:id/offer-history", async (req, res, next) => {
     const { id } = req.params;
     validateAccountId(id);
 
-    const { limit, order, cursor } = parsePaginationParams(req.query, 200);
+    const { limit, order, cursor } = parsePaginationParams(req.query);
 
     let query = server.operations().forAccount(id).limit(limit).order(order);
     if (cursor) query = query.cursor(cursor);
