@@ -398,7 +398,7 @@ router.get("/:id/analytics", async (req, res, next) => {
 });
 
 /**
- * GET /account/:id — reserveBreakdown (must satisfy tests)
+ * GET /account/:id — full account details
  */
 router.get("/:id", async (req, res, next) => {
   try {
@@ -416,20 +416,230 @@ router.get("/:id", async (req, res, next) => {
     const toXLM = (xlm) => xlm.toFixed(7);
     const toStroops = (xlm) => Math.round(xlm * STROOPS_PER_XLM);
 
+    const xlmBalance = (account.balances || []).find((b) => b.asset_type === "native");
+    const assets = (account.balances || [])
+      .filter((b) => b.asset_type !== "native")
+      .map((b) => ({
+        assetCode: b.asset_code,
+        assetIssuer: b.asset_issuer,
+        assetType: b.asset_type,
+        balance: b.balance,
+        limit: b.limit,
+        buyingLiabilities: b.buying_liabilities,
+        sellingLiabilities: b.selling_liabilities,
+        isAuthorized: b.is_authorized,
+        isClawbackEnabled: b.is_clawback_enabled,
+      }));
+
     return success(res, {
       accountId: account.id,
+      sequence: account.sequence,
+      subentryCount: account.subentry_count,
+      xlm: {
+        balance: xlmBalance ? formatBalance(xlmBalance.balance) : formatBalance("0.0000000"),
+        buyingLiabilities: xlmBalance ? formatBalance(xlmBalance.buying_liabilities) : formatBalance("0"),
+        sellingLiabilities: xlmBalance ? formatBalance(xlmBalance.selling_liabilities) : formatBalance("0"),
+      },
+      assets,
+      assetCount: assets.length,
+      signers: account.signers,
+      thresholds: account.thresholds,
+      flags: account.flags,
+      homeDomain: account.home_domain || null,
+      lastModifiedLedger: account.last_modified_ledger,
       reserveBreakdown: {
         baseReserve: { xlm: toXLM(baseReserve), stroops: toStroops(baseReserve) },
         accountReserve: { xlm: toXLM(accountReserve), stroops: toStroops(accountReserve) },
         subentryReserve: { xlm: toXLM(subentryReserve), stroops: toStroops(subentryReserve) },
         totalLocked: { xlm: toXLM(totalLocked), stroops: toStroops(totalLocked) },
         spendable: {
-          xlm: toXLM(parseFloat((account.balances || []).find((b) => b.asset_type === "native")?.balance || "0") - totalLocked),
-          stroops: toStroops(
-            parseFloat((account.balances || []).find((b) => b.asset_type === "native")?.balance || "0") - totalLocked,
-          ),
+          xlm: toXLM(parseFloat(xlmBalance?.balance || "0") - totalLocked),
+          stroops: toStroops(parseFloat(xlmBalance?.balance || "0") - totalLocked),
         },
       },
+    });
+  } catch (err) {
+    handleAccountNotFound(err, next, req.params.id);
+  }
+});
+
+/**
+ * GET /account/:id/risk-score
+ */
+router.get("/:id/risk-score", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    validateAccountId(id);
+
+    const account = await server.loadAccount(id);
+
+    // Get first operation to calculate account age
+    const firstOpResponse = await server.operations()
+      .forAccount(id)
+      .order("asc")
+      .limit(1)
+      .call();
+    const firstOp = firstOpResponse.records[0];
+
+    // Get recent transactions
+    const recentTxResponse = await server.transactions()
+      .forAccount(id)
+      .order("desc")
+      .limit(60)
+      .call();
+    const recentTxs = recentTxResponse.records;
+
+    const factors = [];
+    let score = 50;
+
+    // Factor 1: Account age
+    if (firstOp) {
+      const createdAt = new Date(firstOp.created_at);
+      const now = new Date();
+      const daysOld = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+      
+      if (daysOld > 365) {
+        score += 15;
+        factors.push({
+          name: "Account Age",
+          value: `${daysOld} days`,
+          impact: "positive",
+          detail: "Account is over 1 year old, established reputation"
+        });
+      } else if (daysOld > 30) {
+        score += 10;
+        factors.push({
+          name: "Account Age",
+          value: `${daysOld} days`,
+          impact: "positive",
+          detail: "Account is over 1 month old"
+        });
+      } else {
+        score -= 15;
+        factors.push({
+          name: "Account Age",
+          value: `${daysOld} days`,
+          impact: "negative",
+          detail: "Account is very new (less than 1 month)"
+        });
+      }
+    } else {
+      score -= 10;
+      factors.push({
+        name: "Account Age",
+        value: "No operations found",
+        impact: "neutral",
+        detail: "No operations history found for account"
+      });
+    }
+
+    // Factor 2: Home domain
+    if (account.home_domain) {
+      score += 10;
+      factors.push({
+        name: "Home Domain",
+        value: account.home_domain,
+        impact: "positive",
+        detail: "Account has a home domain set"
+      });
+    } else {
+      score -= 5;
+      factors.push({
+        name: "Home Domain",
+        value: "Not set",
+        impact: "neutral",
+        detail: "No home domain configured"
+      });
+    }
+
+    // Factor 3: Multi-sig
+    if (account.signers.length > 1) {
+      score += 10;
+      factors.push({
+        name: "Multi-signature",
+        value: `${account.signers.length} signers`,
+        impact: "positive",
+        detail: "Account uses multi-signature security"
+      });
+    } else {
+      factors.push({
+        name: "Multi-signature",
+        value: "Single signer",
+        impact: "neutral",
+        detail: "Account uses single signature"
+      });
+    }
+
+    // Factor 4: Number of trustlines
+    const trustlineCount = (account.balances || []).filter(b => b.asset_type !== "native").length;
+    if (trustlineCount > 30) {
+      score -= 15;
+      factors.push({
+        name: "Trustline Count",
+        value: `${trustlineCount} trustlines`,
+        impact: "negative",
+        detail: "High number of trustlines may indicate risky behavior"
+      });
+    } else if (trustlineCount > 10) {
+      score -= 5;
+      factors.push({
+        name: "Trustline Count",
+        value: `${trustlineCount} trustlines`,
+        impact: "neutral",
+        detail: "Moderate number of trustlines"
+      });
+    } else {
+      score += 5;
+      factors.push({
+        name: "Trustline Count",
+        value: `${trustlineCount} trustlines`,
+        impact: "positive",
+        detail: "Low number of trustlines"
+      });
+    }
+
+    // Factor 5: Recent activity
+    if (recentTxs.length > 50) {
+      score -= 10;
+      factors.push({
+        name: "Recent Activity",
+        value: `${recentTxs.length} transactions in last limit`,
+        impact: "negative",
+        detail: "Very high recent transaction activity"
+      });
+    } else if (recentTxs.length > 20) {
+      score -= 5;
+      factors.push({
+        name: "Recent Activity",
+        value: `${recentTxs.length} transactions in last limit`,
+        impact: "neutral",
+        detail: "Moderate recent transaction activity"
+      });
+    } else {
+      score += 5;
+      factors.push({
+        name: "Recent Activity",
+        value: `${recentTxs.length} transactions in last limit`,
+        impact: "positive",
+        detail: "Low recent transaction activity"
+      });
+    }
+
+    // Clamp score between 0 and 100
+    score = Math.max(0, Math.min(100, score));
+
+    // Determine rating
+    let rating;
+    if (score >= 70) rating = "low";
+    else if (score >= 40) rating = "medium";
+    else rating = "high";
+
+    return success(res, {
+      accountId: account.id,
+      score,
+      label: rating, // For backwards compatibility with tests
+      rating,
+      factors
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
