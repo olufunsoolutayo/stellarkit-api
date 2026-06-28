@@ -1,10 +1,11 @@
 /**
  * Centralised error handler middleware.
  * Formats Horizon / Stellar SDK errors into consistent JSON responses.
+ * All non-Horizon errors are wrapped in StellarKitError for consistency.
  */
 const { translateHorizonError } = require("../utils/horizonErrors");
-
 const { mapHorizonErrorToStatus } = require("../utils/horizonStatusMapper");
+const StellarKitError = require("../utils/StellarKitError");
 
 /**
  * Logs 4xx and 5xx responses to the console.
@@ -55,28 +56,46 @@ function errorHandler(err, req, res, next) {
     });
   }
 
+  // StellarKitError instances — already structured
+  if (err instanceof StellarKitError) {
+    logError(err.statusCode, req, err.message);
+    return res.status(err.statusCode).json({
+      success: false,
+      error: err.toJSON(),
+    });
+  }
+
   // Payload too large errors from body parsers
   if (err.type === "entity.too.large" || err.status === 413) {
     const maxBodySize = process.env.MAX_BODY_SIZE || "10kb";
-    const message = `Payload too large. Maximum request body size is ${maxBodySize}.`;
-    logError(413, req, message);
+    const ske = new StellarKitError(
+      `Payload too large. Maximum request body size is ${maxBodySize}.`,
+      413,
+      "PayloadTooLargeError",
+      null,
+      `Reduce your request body size to under ${maxBodySize}.`
+    );
+    logError(413, req, ske.message);
     return res.status(413).json({
       success: false,
-      error: {
-        type: "PayloadTooLargeError",
-        message,
-      },
+      error: ske.toJSON(),
     });
   }
 
   // Validation errors (thrown manually)
   if (err.isValidation) {
+    const ske = new StellarKitError(
+      err.message,
+      400,
+      "ValidationError",
+      null,
+      err.expectedFormat ? `Expected format: ${err.expectedFormat}` : null
+    );
     logError(400, req, err.message);
     return res.status(400).json({
       success: false,
       error: {
-        type: "ValidationError",
-        message: err.message,
+        ...ske.toJSON(),
         field: err.field,
         receivedValue: err.receivedValue,
         expectedFormat: err.expectedFormat,
@@ -90,13 +109,11 @@ function errorHandler(err, req, res, next) {
     process.env.NODE_ENV === "production"
       ? "An unexpected error occurred."
       : err.message;
+  const skeGeneric = new StellarKitError(message, status, "ServerError");
   logError(status, req, err.message);
   return res.status(status).json({
     success: false,
-    error: {
-      type: "ServerError",
-      message,
-    },
+    error: skeGeneric.toJSON(),
   });
 }
 

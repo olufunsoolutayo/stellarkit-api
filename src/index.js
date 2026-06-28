@@ -32,6 +32,7 @@ const streamRouter = require("./routes/stream");
 const utilsRouter = require("./routes/utils");
 const stellarTomlRouter = require("./routes/stellarToml");
 const claimableBalancesRouter = require("./routes/claimableBalances");
+const cacheStatsRouter = require("./routes/cacheStats");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -200,6 +201,7 @@ app.use("/stream", streamRouter);
 app.use("/utils", utilsRouter);
 app.use("/stellar-toml", stellarTomlRouter);
 app.use("/claimable-balances", claimableBalancesRouter);
+app.use("/cache", cacheStatsRouter);
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 app.get("/", (req, res) => {
@@ -260,6 +262,7 @@ app.get("/", (req, res) => {
         { method: "GET", path: "/utils/convert?xlm=:xlm", description: "Convert between XLM and stroops" },
         { method: "GET", path: "/utils/validate-account?id=:id", description: "Validate a Stellar public key format (no Horizon call)" },
         { method: "WS", path: "/stream/ledgers", description: "Real-time stream of live Stellar ledger updates" },
+        { method: "GET", path: "/cache/stats", description: "Cache hit rate and performance statistics" },
       ],
       docs: "https://github.com/stellarkit-lab-devtools/stellarkit-api#readme",
     },
