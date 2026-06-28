@@ -101,15 +101,15 @@ async function resolveTrustlineToml(balance, issuerCache, tomlCache) {
   }
 
   return {
-    assetCode,
-    assetIssuer,
-    assetType: balance.asset_type,
+    asset: {
+      code: assetCode,
+      issuer: assetIssuer,
+      type: balance.asset_type,
+    },
     balance: balance.balance,
     limit: balance.limit,
-    buyingLiabilities: balance.buying_liabilities,
-    sellingLiabilities: balance.selling_liabilities,
     isAuthorized: balance.is_authorized,
-    isClawbackEnabled: balance.is_clawback_enabled,
+    isAuthorizedToMaintainLiabilities: balance.is_authorized_to_maintain_liabilities,
     toml,
   };
 }
@@ -131,18 +131,25 @@ router.get("/:id/trustlines", async (req, res, next) => {
       (b) => b.asset_type !== "native",
     );
 
-    const trustlines = await Promise.all(
+    let trustlines = await Promise.all(
       trustlineBalances.map((b) =>
         resolveTrustlineToml(b, issuerCache, tomlCache),
       ),
     );
 
+    const { assetCode } = req.query;
+    if (assetCode) {
+      const filterLower = assetCode.toLowerCase();
+      trustlines = trustlines.filter(
+        (t) => t.asset.code.toLowerCase() === filterLower,
+      );
+    }
+
     return success(res, {
-      accountId: account.id,
-      assets: trustlines,
-      assetCount: trustlines.length,
-      trustlines,
-      count: trustlines.length,
+      items: trustlines,
+      total: trustlines.length,
+      limit: null,
+      cursor: null,
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
@@ -161,6 +168,35 @@ router.get("/:id/balances", async (req, res, next) => {
     const formatted = formatAccountBalances(account);
 
     return success(res, formatted);
+  } catch (err) {
+    handleAccountNotFound(err, next, req.params.id);
+  }
+});
+
+/**
+ * GET /account/:id/native-balance
+ */
+router.get("/:id/native-balance", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    validateAccountId(id);
+
+    const account = await server.loadAccount(id);
+    const xlmBalance = (account.balances || []).find((b) => b.asset_type === "native");
+
+    if (!xlmBalance) {
+      return success(res, {
+        balance: formatBalance("0.0000000"),
+        buyingLiabilities: formatBalance("0.0000000"),
+        sellingLiabilities: formatBalance("0.0000000"),
+      });
+    }
+
+    return success(res, {
+      balance: formatBalance(xlmBalance.balance),
+      buyingLiabilities: formatBalance(xlmBalance.buying_liabilities),
+      sellingLiabilities: formatBalance(xlmBalance.selling_liabilities),
+    });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
   }
@@ -229,14 +265,11 @@ router.get("/:id/payments", async (req, res, next) => {
 
     const hasMore = rawRecords.length === limit;
 
-    return success(res, paymentOps, {
-      meta: {
-        count: paymentOps.length,
-        limit,
-        order,
-        nextCursor: paymentOps.length ? nextCursor : null,
-        hasMore,
-      },
+    return success(res, {
+      items: paymentOps,
+      total: paymentOps.length,
+      limit,
+      cursor: paymentOps.length ? nextCursor : null,
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
@@ -291,8 +324,11 @@ router.get("/:id/offers", async (req, res, next) => {
       ? (offerResponse.records[offerResponse.records.length - 1] || {}).paging_token
       : null;
 
-    return success(res, offers, {
-      meta: { count: offers.length, limit, nextCursor, hasMore },
+    return success(res, {
+      items: offers,
+      total: offers.length,
+      limit,
+      cursor: nextCursor,
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
@@ -459,7 +495,7 @@ router.get("/:id/sponsorship", async (req, res, next) => {
       server.accounts().sponsor(id).call(),
     ]);
 
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const sponsoredEntries = [];
 
     (account.balances || []).forEach((b) => {
       if (b.sponsor) {
@@ -491,42 +527,15 @@ router.get("/:id/sponsorship", async (req, res, next) => {
             sponsor: dataSponsors[key],
           });
         }
-        if (!op.transaction_successful) {
-          cursor = op.paging_token;
-          continue;
-        }
-
-        const assetCode = op.asset_code || "XLM";
-        const assetIssuer = op.asset_issuer || null;
-        const assetKey = assetIssuer ? `${assetCode}:${assetIssuer}` : assetCode;
-        const amount = parseFloat(op.amount || op.starting_balance || "0");
-
-        if (!volumeMap[assetKey]) {
-          volumeMap[assetKey] = {
-            assetCode,
-            assetIssuer,
-            totalSent: 0,
-            totalReceived: 0,
-          };
-        }
-
-        const isSent = (op.type === "payment" && op.from === id) || (op.type === "create_account" && op.funder === id);
-        if (isSent) volumeMap[assetKey].totalSent += amount;
-        else volumeMap[assetKey].totalReceived += amount;
-
-        totalTransactions++;
-        cursor = op.paging_token;
-      }
-
-      if (records.length < 200) done = true;
+      });
     }
 
     const accountsSponsoring = (sponsoringResponse.records || []).map((acc) => acc.id);
 
     return success(res, {
-      period: { days, from: since.toISOString(), to: new Date().toISOString() },
-      totalTransactions,
-      volumeByAsset,
+      accountId: account.id,
+      sponsoredEntries,
+      accountsSponsoring,
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
@@ -902,8 +911,11 @@ router.get("/:id/offer-history", async (req, res, next) => {
 
     const nextCursor = records.length > 0 ? records[records.length - 1].paging_token : null;
 
-    return success(res, offerOps, {
-      meta: { count: offerOps.length, limit, order, nextCursor, hasMore: records.length === limit },
+    return success(res, {
+      items: offerOps,
+      total: offerOps.length,
+      limit,
+      cursor: nextCursor,
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
@@ -925,8 +937,11 @@ router.get("/:id/pool-positions", async (req, res, next) => {
     );
 
     if (poolShareTrustlines.length === 0) {
-      return success(res, [], {
-        meta: { count: 0, accountId: id, message: "No liquidity pool positions found for this account." },
+      return success(res, {
+        items: [],
+        total: 0,
+        limit: null,
+        cursor: null,
       });
     }
 
@@ -982,8 +997,11 @@ router.get("/:id/pool-positions", async (req, res, next) => {
       });
     }
 
-    return success(res, positions, {
-      meta: { count: positions.length, accountId: id },
+    return success(res, {
+      items: positions,
+      total: positions.length,
+      limit: null,
+      cursor: null,
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);

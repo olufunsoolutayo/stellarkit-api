@@ -76,14 +76,11 @@ router.get(
       const lastRecord = records[records.length - 1];
       const nextCursor = lastRecord ? lastRecord.paging_token : null;
 
-      return success(res, holders, {
-        meta: {
-          count: holders.length,
-          limit,
-          order,
-          nextCursor,
-          hasMore: holders.length === limit,
-        },
+      return success(res, {
+        items: holders,
+        total: holders.length,
+        limit,
+        cursor: nextCursor,
       });
     } catch (err) {
       next(err);
@@ -397,8 +394,11 @@ router.get("/search", async (req, res, next) => {
       flags: a.flags,
     }));
 
-    return success(res, assets, {
-      meta: { count: assets.length, query: assetCode },
+    return success(res, {
+      items: assets,
+      total: assets.length,
+      limit,
+      cursor: null,
     });
   } catch (err) {
     next(err);

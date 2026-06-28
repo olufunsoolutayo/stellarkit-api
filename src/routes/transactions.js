@@ -128,14 +128,11 @@ router.get("/:id", async (req, res, next) => {
       };
     });
 
-    return success(res, transactions, {
-      meta: {
-        count: transactions.length,
-        limit,
-        order,
-        nextCursor: txResponse.records.length > 0 ? txResponse.records[txResponse.records.length - 1].paging_token : null,
-        hasMore: transactions.length === limit,
-      },
+    return success(res, {
+      items: transactions,
+      total: transactions.length,
+      limit,
+      cursor: txResponse.records.length > 0 ? txResponse.records[txResponse.records.length - 1].paging_token : null,
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
@@ -246,14 +243,11 @@ router.get("/:id/operations", async (req, res, next) => {
     const lastRecord = opResponse.records[opResponse.records.length - 1];
     const nextCursor = lastRecord ? lastRecord.paging_token : null;
 
-    return success(res, operations, {
-      meta: {
-        count: operations.length,
-        limit,
-        order,
-        nextCursor,
-        hasMore: operations.length === limit,
-      },
+    return success(res, {
+      items: operations,
+      total: operations.length,
+      limit,
+      cursor: nextCursor,
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
