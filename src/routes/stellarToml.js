@@ -26,6 +26,14 @@ function validateDomain(domain) {
   return normalized;
 }
 
+/**
+ * GET /stellar-toml
+ * Returns an error when no domain parameter is provided.
+ * This endpoint requires a domain parameter in the path (use GET /stellar-toml/:domain instead).
+ *
+ * @example
+ * GET /stellar-toml
+ */
 router.get("/", (req, res, next) => {
   const err = new Error("Domain parameter is required.");
   err.statusCode = 400;
@@ -33,6 +41,18 @@ router.get("/", (req, res, next) => {
   next(err);
 });
 
+/**
+ * GET /stellar-toml/:domain
+ * Fetches and parses the stellar.toml file from the specified domain.
+ * Returns structured TOML data containing asset issuer information, currency metadata,
+ * validator details, and other Stellar anchor service configurations.
+ *
+ * @param {string} domain - Hostname without protocol or path (e.g., "stellar.org" or "example.com")
+ *
+ * @example
+ * GET /stellar-toml/stellar.org
+ * GET /stellar-toml/testanchor.stellar.org
+ */
 router.get("/:domain", async (req, res, next) => {
   try {
     const domain = validateDomain(req.params.domain);
