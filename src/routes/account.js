@@ -761,11 +761,19 @@ router.get("/:id/can-receive/:assetCode/:assetIssuer", async (req, res, next) =>
 
     const canReceive = isAuthorized && availableCapacity > 0;
 
+    const reasons = [];
+    if (!isAuthorized) {
+      reasons.push("Trustline is not authorized by the issuer.");
+    }
+    if (isAuthorized && availableCapacity <= 0) {
+      reasons.push("No available capacity on trustline (limit reached or fully utilized).");
+    }
+
     return success(res, {
       accountId: account.id,
       asset: { assetCode: normalizedAssetCode, assetIssuer },
       canReceive,
-      reasons: isAuthorized ? [] : ["Trustline is not authorized by the issuer."],
+      reasons,
       trustlineExists: true,
       isAuthorized,
       availableCapacity,
