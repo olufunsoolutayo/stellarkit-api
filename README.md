@@ -79,6 +79,8 @@ This project is ideal for:
 
 ## Getting Started
 
+New to Stellar or this API? Start with the **[Getting Started Guide](docs/getting-started.md)** for step-by-step instructions. Also see the **[Glossary](docs/glossary.md)** for explanations of Stellar-specific terminology.
+
 ### Prerequisites
 
 - Node.js >= 18
@@ -130,6 +132,12 @@ Visit `http://localhost:3000` after startup.
 | `CACHE_TTL_MS` | `5000` | Cache time-to-live in milliseconds for the `/network-status` and `/fee-estimate` endpoints. | ⬜ No |
 
 > All variables are optional — the server starts with sensible defaults when none are set. Set `STELLAR_NETWORK=mainnet` explicitly before deploying to production to avoid accidentally pointing at testnet.
+
+---
+
+## Stellar Terminology
+
+New to Stellar? See the **[Glossary](docs/glossary.md)** for plain-language explanations of stroops, trustlines, claimable balances, anchors, liquidity pools, and other key concepts.
 
 ---
 
