@@ -4,6 +4,7 @@ const router = express.Router();
 const { server, fetchAccountCreation, NETWORK } = require("../config/stellar");
 const { success, toISOTimestamp } = require("../utils/response");
 const { makeAccountNotFoundError } = require("../utils/errors");
+const cacheService = require("../services/cache");
 
 const {
   validateAccountId,
@@ -19,6 +20,9 @@ const { Asset } = require("@stellar/stellar-sdk");
 
 const { getAssetMetadataFromToml } = require("../utils/tomlResolver");
 const { formatBalance } = require("../utils/formatBalance");
+
+// Cache TTL for account endpoint responses (in seconds)
+const CACHE_TTL_ACCOUNT = parseInt(process.env.CACHE_TTL_ACCOUNT_MS, 10) / 1000 || 10;
 
 function validateLimit(limit, max = 200) {
   const n = Number(limit);
@@ -367,7 +371,20 @@ router.get("/:id/analytics", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
+    res.set("X-Cache", "MISS");
     validateAccountId(id);
+
+    const cacheKey = `account:${id}`;
+    const fresh = req.query.fresh === "true";
+
+    // Check cache first (unless fresh=true)
+    if (!fresh) {
+      const cached = cacheService.get(cacheKey);
+      if (cached) {
+        res.set("X-Cache", "HIT");
+        return success(res, cached);
+      }
+    }
 
     const account = await server.loadAccount(id);
 
@@ -380,7 +397,7 @@ router.get("/:id", async (req, res, next) => {
     const toXLM = (xlm) => xlm.toFixed(7);
     const toStroops = (xlm) => Math.round(xlm * STROOPS_PER_XLM);
 
-    return success(res, {
+    const data = {
       accountId: account.id,
       reserveBreakdown: {
         baseReserve: { xlm: toXLM(baseReserve), stroops: toStroops(baseReserve) },
@@ -394,7 +411,13 @@ router.get("/:id", async (req, res, next) => {
           ),
         },
       },
-    });
+    };
+
+    // Cache the response
+    cacheService.set(cacheKey, data, CACHE_TTL_ACCOUNT);
+
+    res.set("X-Cache", "MISS");
+    return success(res, data);
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
   }
@@ -459,7 +482,7 @@ router.get("/:id/sponsorship", async (req, res, next) => {
       server.accounts().sponsor(id).call(),
     ]);
 
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const sponsoredEntries = [];
 
     (account.balances || []).forEach((b) => {
       if (b.sponsor) {
@@ -491,42 +514,16 @@ router.get("/:id/sponsorship", async (req, res, next) => {
             sponsor: dataSponsors[key],
           });
         }
-        if (!op.transaction_successful) {
-          cursor = op.paging_token;
-          continue;
-        }
-
-        const assetCode = op.asset_code || "XLM";
-        const assetIssuer = op.asset_issuer || null;
-        const assetKey = assetIssuer ? `${assetCode}:${assetIssuer}` : assetCode;
-        const amount = parseFloat(op.amount || op.starting_balance || "0");
-
-        if (!volumeMap[assetKey]) {
-          volumeMap[assetKey] = {
-            assetCode,
-            assetIssuer,
-            totalSent: 0,
-            totalReceived: 0,
-          };
-        }
-
-        const isSent = (op.type === "payment" && op.from === id) || (op.type === "create_account" && op.funder === id);
-        if (isSent) volumeMap[assetKey].totalSent += amount;
-        else volumeMap[assetKey].totalReceived += amount;
-
-        totalTransactions++;
-        cursor = op.paging_token;
-      }
-
-      if (records.length < 200) done = true;
+      });
     }
 
     const accountsSponsoring = (sponsoringResponse.records || []).map((acc) => acc.id);
 
     return success(res, {
-      period: { days, from: since.toISOString(), to: new Date().toISOString() },
-      totalTransactions,
-      volumeByAsset,
+      accountId: account.id,
+      sponsoredEntries,
+      accountsSponsoring,
+      count: sponsoredEntries.length,
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);

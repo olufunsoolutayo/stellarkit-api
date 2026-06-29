@@ -14,12 +14,9 @@ const rateLimiter = require("./middleware/rateLimiter");
 const contentTypeValidator = require("./middleware/contentTypeValidator");
 const bodySizeLimit = require("./middleware/bodySizeLimit");
 const errorHandler = require("./middleware/errorHandler");
-<<<<<<< HEAD
 const requestIdMiddleware = require("./middleware/requestId");
-=======
 const apiKeyMiddleware = require("./middleware/apiKeyAuth");
 const sanitize = require("./middleware/sanitize");
->>>>>>> f13de3bc2aa5b1589ee41cb19e8aeead312a3b96
 
 const networkStatusRouter = require("./routes/networkStatus");
 const feeEstimateRouter = require("./routes/feeEstimate");
