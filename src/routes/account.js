@@ -1,20 +1,15 @@
 const express = require("express");
 const router = express.Router();
-const { server, NETWORK } = require("../config/stellar");
-const { success } = require("../utils/response");
-const { validateAccountId, validateLimit } = require("../utils/validators");
-const { accountSummaryRateLimiter } = require("../middleware/rateLimiter");
-const registerParamValidation = require("../middleware/validateRouteParams");
-registerParamValidation(router);
-
-const { server, fetchAccountCreation, NETWORK } = require("../config/stellar");
+const { server, NETWORK, fetchAccountCreation } = require("../config/stellar");
 const { success, toISOTimestamp } = require("../utils/response");
 const {
   makeAccountNotFoundError,
   makeClaimableBalanceNotFoundError,
 } = require("../utils/errors");
-
 const { validateAccountId, validateAssetCode } = require("../utils/validators");
+const { accountSummaryRateLimiter } = require("../middleware/rateLimiter");
+const registerParamValidation = require("../middleware/validateRouteParams");
+registerParamValidation(router);
 
 const { parsePaginationParams } = require("../utils/pagination");
 const { buildAccountAgeResponse } = require("../utils/accountAge");
