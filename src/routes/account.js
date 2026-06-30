@@ -497,7 +497,26 @@ router.get("/:id/trades", async (req, res, next) => {
 router.get("/:id/offers", async (req, res, next) => {
   try {
     const { id } = req.params;
+    const { offerId } = req.query;
     validateAccountId(id);
+
+    if (offerId) {
+      try {
+        const offer = await server.offers().offer(offerId).call();
+        return success(res, offer);
+      } catch (err) {
+        if (err.response && err.response.status === 404) {
+          const notFound = new Error(
+            `Offer '${offerId}' was not found on the Stellar ${NETWORK} network.`,
+          );
+          notFound.isOfferNotFound = true;
+          notFound.suggestion =
+            "The offer may have already been filled, cancelled, or the offer ID may be incorrect.";
+          throw notFound;
+        }
+        throw err;
+      }
+    }
 
     const limit = validateLimit(req.query.limit ?? 20);
     const cursor = req.query.cursor || undefined;
@@ -564,7 +583,11 @@ router.get("/:id/offers", async (req, res, next) => {
       cursor: nextCursor,
     });
   } catch (err) {
-    handleAccountNotFound(err, next, req.params.id);
+    if (req.query.offerId) {
+      next(err);
+    } else {
+      handleAccountNotFound(err, next, req.params.id);
+    }
   }
 });
 
@@ -1129,49 +1152,6 @@ router.get("/:id/risk-score", async (req, res, next) => {
     });
   } catch (err) {
     handleAccountNotFound(err, next, req.params.id);
-  }
-});
-
-/**
- * GET /account/:id/offers
- * Returns open offers for a Stellar account.
- * Optionally query a specific offer with ?offerId=<id>.
- *
- * @param {string} id - Stellar account public key (G...)
- * @param {string} [offerId] - Specific offer ID to look up
- *
- * @example
- * GET /account/GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN/offers
- * GET /account/GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN/offers?offerId=123456
- */
-router.get("/:id/offers", async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { offerId } = req.query;
-    validateAccountId(id);
-
-    if (offerId) {
-      try {
-        const offer = await server.offers().offer(offerId).call();
-        return success(res, offer);
-      } catch (err) {
-        if (err.response && err.response.status === 404) {
-          const notFound = new Error(
-            `Offer '${offerId}' was not found on the Stellar ${NETWORK} network.`,
-          );
-          notFound.isOfferNotFound = true;
-          notFound.suggestion =
-            "The offer may have already been filled, cancelled, or the offer ID may be incorrect.";
-          throw notFound;
-        }
-        throw err;
-      }
-    }
-
-    const offers = await server.offers().forAccount(id).call();
-    return success(res, offers.records);
-  } catch (err) {
-    next(err);
   }
 });
 
