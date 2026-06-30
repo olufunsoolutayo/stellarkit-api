@@ -1652,6 +1652,13 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting.
 
 ---
 
+## 👥 Community
+
+- [Contributors](CONTRIBUTORS.md) — See everyone who has contributed to StellarKit API
+- [Code of Conduct](CODE_OF_CONDUCT.md) — Our community standards
+
+---
+
 ## 📁 Project Structure
 
 ```
